@@ -43,48 +43,54 @@ const createProduct = async (req, res) => {
 
 const getAllProducts = async (req, res) => {
   try {
-    if (Object.keys(req.query).length > 0) {
-      const areQueriesValid = Object.keys(req.query).every((key) =>
-        getProductQueryOptions.includes(key)
-      );
+    const queryObject = {};
 
-      if (!areQueriesValid) {
-        return res.status(422).json({
-          message: `Invalid query parameters. Valid options are: ${getProductQueryOptions.join(
-            ", "
-          )}`,
-        });
-      }
+    // Validate allowed keys
+    const allowedKeys = getProductQueryOptions;
+    const areQueriesValid = Object.keys(req.query).every((key) =>
+      allowedKeys.includes(key)
+    );
 
-      if (req.query.active) {
-        req.query.active = req.query.active === "true";
-      }
-
-      if (req.query.category) {
-        if (!mongoose.isValidObjectId(req.query.category)) {
-          return res.status(422).json({ message: "Invalid category ID" });
-        }
-      }
-
-      const products = await Product.find(req.query)
-        .select("-__v")
-        .populate({ path: "category", select: "_id name" });
-
-      return res
-        .status(200)
-        .json({ message: "Products retrieved successfully", data: products });
-    } else {
-      const products = await Product.find()
-        .select("-__v")
-        .populate({ path: "category", select: "_id name" });
-      return res
-        .status(200)
-        .json({ message: "Products retrieved successfully", data: products });
+    if (!areQueriesValid) {
+      return res.status(422).json({
+        message: `Invalid query parameters. Valid options are: ${allowedKeys.join(
+          ", "
+        )}`,
+      });
     }
+
+    // Handle 'active' (boolean)
+    if (req.query.active !== undefined) {
+      queryObject.active = req.query.active === "true";
+    }
+
+    // Handle 'category' (ObjectId)
+    if (req.query.category) {
+      if (!mongoose.isValidObjectId(req.query.category)) {
+        return res.status(422).json({ message: "Invalid category ID" });
+      }
+      queryObject.category = req.query.category;
+    }
+
+    // Handle 'name' (partial text search)
+    if (req.query.name) {
+      queryObject.name = { $regex: req.query.name, $options: "i" };
+    }
+
+    //  Execute the query
+    const products = await Product.find(queryObject)
+      .select("-__v")
+      .populate({ path: "category", select: "_id name" });
+
+    return res.status(200).json({
+      message: "Products retrieved successfully",
+      data: products,
+    });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Error retrieving products", error: error.message });
+    return res.status(500).json({
+      message: "Error retrieving products",
+      error: error.message,
+    });
   }
 };
 
